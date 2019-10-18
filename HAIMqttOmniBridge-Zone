@@ -1,0 +1,79 @@
+metadata {
+    definition (name: "MqttZoneOmniBridge-Zone", namespace: "Omnipro", author: "Test") {
+        capability "Initialize"
+        capability "Contact Sensor"
+
+        
+        attribute "contact", "string"
+        
+        command "publishMsg", ["String"]
+                
+    }
+
+    preferences {
+        section("Device Settings:") {
+            input "MqttIP", "string", title:"MqttIP", description: "", required: true, displayDuringSetup: true
+            input "zone", "string", title:"Zone", description: "", required: true, displayDuringSetup: true
+        }
+    }
+
+
+}
+
+void installed() {
+    log.warn "mqtt installed..."
+}
+
+// Parse incoming device messages to generate events
+void parse(String description) {
+    log.debug description
+    log.debug interfaces.mqtt.parseMessage(description).payload
+    state = interfaces.mqtt.parseMessage(description)
+    if ( interfaces.mqtt.parseMessage(description).payload == "secure") {
+        log.debug("Alarm tamper is clear")
+		//sendEvent(name: "tamper", value: "clear")
+        sendEvent(name: "contact", value: "closed")
+        contact = "closed"
+    } else {
+        log.debug("Alarm tamper is detected")
+		//sendEvent(name: "tamper", value: "detected")
+        sendEvent(name: "contact", value: "open")
+        contact = "open"
+    }    
+        
+}
+
+void publishMsg(String s) {
+    interfaces.mqtt.publish("omnilink/${button}/command", s)
+}
+
+void updated() {
+    log.info "updated..."
+    initialize()
+}
+
+void uninstalled() {
+    log.info "disconnecting from mqtt"
+    interfaces.mqtt.disconnect()
+}
+
+void initialize() {
+    try {
+        def mqttInt = interfaces.mqtt
+        //open connection
+        mqttInt.connect("tcp://${settings.MqttIP}:1883", "hubitattest", null, null)
+        //give it a chance to start
+        pauseExecution(1000)
+        log.info "connection established"
+        mqttInt.subscribe("omnilink/${zone}/state")
+        log.info "Subscribed to omnilink/${zone}/state"
+        
+    } catch(e) {
+        log.debug "mqtt initialize error: ${e.message}"
+    }
+}
+
+void mqttClientStatus(String message) {
+	log.info "Mqtt Received status message ${message}"
+}
+
