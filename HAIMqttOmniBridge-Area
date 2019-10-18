@@ -24,7 +24,7 @@ metadata {
 }
 
 void installed() {
-    log.warn "mqtt installed..."
+    log.warn "HAIMqttOmniBridge-Area mqtt installed..."
 }
 
 def logsOff() {
