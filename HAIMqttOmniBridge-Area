@@ -1,0 +1,102 @@
+metadata {
+    definition (name: "HAIMqttOmniBridge-Area", namespace: "Omnipro", author: "") {
+        capability "Initialize"
+        capability "Contact Sensor"
+        capability "Sensor"
+        capability "Alarm"
+        
+        attribute "status", "string"
+        
+        command "publishMsg", ["String"]
+                
+    }
+
+    preferences {
+        // put configuration here
+        section("Device Settings:") {
+            input "MqttIP", "string", title:"MqttIP", description: "", required: true, displayDuringSetup: true
+            input "area", "string", title:"Area", description: "", required: true, displayDuringSetup: true
+            input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
+        }
+    }
+
+
+}
+
+void installed() {
+    log.warn "mqtt installed..."
+}
+
+def logsOff() {
+    log.warn "debug logging disabled..."
+    device.updateSetting("logEnable", [value: "false", type: "bool"])
+}
+
+def updated() {
+    log.info "updated..."
+    initialize()
+    log.warn "debug logging is: ${logEnable == true}"
+    if (logEnable) runIn(1800, logsOff)
+}
+
+// Parse incoming device messages to generate events
+void parse(String description) {
+    if (logEnable) log.debug description
+    if (logEnable) log.debug interfaces.mqtt.parseMessage(description).payload
+    state = interfaces.mqtt.parseMessage(description)
+    if (logEnable) log.debug("Alarm ${interfaces.mqtt.parseMessage(description).payload}")
+    status=interfaces.mqtt.parseMessage(description).payload 
+    sendEvent(name: "alarm", value: interfaces.mqtt.parseMessage(description).payload)
+    sendEvent(name: "status", value: interfaces.mqtt.parseMessage(description).payload)
+
+}
+
+void publishMsg(String s) {
+    if (logEnable) log.info "publish in omnilink/${area}/command   ${s}"
+    interfaces.mqtt.publish("omnilink/${area}/command", s)
+}
+
+void uninstalled() {
+    if (logEnable) log.info "disconnecting from mqtt"
+    interfaces.mqtt.disconnect()
+}
+
+void initialize() {
+    try {
+        def mqttInt = interfaces.mqtt
+        //open connection
+        mqttInt.connect("tcp://${settings.MqttIP}:1883", "hubitattest", null, null)
+        //give it a chance to start
+        pauseExecution(1000)
+        if (logEnable) log.info "connection established"
+        mqttInt.subscribe("omnilink/${area}/state")
+        if (logEnable) log.info "Subscribed to omnilink/${area}/state"
+        
+    } catch(e) {
+        log.debug "mqtt initialize error: ${e.message}"
+    }
+}
+
+void mqttClientStatus(String message) {
+	if (logEnable) log.info "Mqtt Received status message ${message}"
+}
+
+void armHome() {
+    if (logEnable) log.info "Mqtt Received status message to arm home"
+    publishMsg("arm_home")
+}
+
+void armNight() {
+    if (logEnable) log.info "Mqtt Received status message to arm_night"
+    publishMsg("arm_night")
+}
+
+void armAway() {
+    if (logEnable) log.info "Mqtt Received status message to arm_away"
+    publishMsg("arm_away")
+}
+
+void disarm() {
+    if (logEnable) log.info "Mqtt Received status message to disarm"
+    publishMsg("disarm")
+}
