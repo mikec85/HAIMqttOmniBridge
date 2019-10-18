@@ -1,5 +1,5 @@
 metadata {
-    definition (name: "MqttZoneOmniBridge-Zone", namespace: "Omnipro", author: "Test") {
+    definition (name: "HAIMqttOmniBridge-Zone", namespace: "Omnipro", author: "") {
         capability "Initialize"
         capability "Contact Sensor"
 
@@ -14,6 +14,7 @@ metadata {
         section("Device Settings:") {
             input "MqttIP", "string", title:"MqttIP", description: "", required: true, displayDuringSetup: true
             input "zone", "string", title:"Zone", description: "", required: true, displayDuringSetup: true
+            input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
         }
     }
 
@@ -23,7 +24,10 @@ metadata {
 void installed() {
     log.warn "mqtt installed..."
 }
-
+def logsOff() {
+    log.warn "debug logging disabled..."
+    device.updateSetting("logEnable", [value: "false", type: "bool"])
+}
 // Parse incoming device messages to generate events
 void parse(String description) {
     log.debug description
@@ -31,12 +35,10 @@ void parse(String description) {
     state = interfaces.mqtt.parseMessage(description)
     if ( interfaces.mqtt.parseMessage(description).payload == "secure") {
         log.debug("Alarm tamper is clear")
-		//sendEvent(name: "tamper", value: "clear")
         sendEvent(name: "contact", value: "closed")
         contact = "closed"
     } else {
         log.debug("Alarm tamper is detected")
-		//sendEvent(name: "tamper", value: "detected")
         sendEvent(name: "contact", value: "open")
         contact = "open"
     }    
@@ -50,10 +52,13 @@ void publishMsg(String s) {
 void updated() {
     log.info "updated..."
     initialize()
+    log.warn "debug logging is: ${logEnable == true}"
+    if (logEnable) runIn(1800, logsOff)
+    
 }
 
 void uninstalled() {
-    log.info "disconnecting from mqtt"
+    if (logEnable) log.info "disconnecting from mqtt"
     interfaces.mqtt.disconnect()
 }
 
@@ -64,9 +69,9 @@ void initialize() {
         mqttInt.connect("tcp://${settings.MqttIP}:1883", "hubitattest", null, null)
         //give it a chance to start
         pauseExecution(1000)
-        log.info "connection established"
+        if (logEnable) log.info "connection established"
         mqttInt.subscribe("omnilink/${zone}/state")
-        log.info "Subscribed to omnilink/${zone}/state"
+        if (logEnable) log.info "Subscribed to omnilink/${zone}/state"
         
     } catch(e) {
         log.debug "mqtt initialize error: ${e.message}"
@@ -74,6 +79,6 @@ void initialize() {
 }
 
 void mqttClientStatus(String message) {
-	log.info "Mqtt Received status message ${message}"
+	if (logEnable) log.info "Mqtt Received status message ${message}"
 }
 
