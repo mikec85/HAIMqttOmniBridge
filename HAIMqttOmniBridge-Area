@@ -1,18 +1,18 @@
 metadata {
-    definition (name: "HAIMqttOmniBridge-Area", namespace: "Omnipro", author: "") {
+    definition (name: "HAIMqttOmniBridge-Area", namespace: "Omnipro", author: "Test") {
         capability "Initialize"
-        capability "Contact Sensor"
-        capability "Sensor"
-        capability "Alarm"
         
         attribute "status", "string"
         
         command "publishMsg", ["String"]
+        command "armHome"
+        command "armNight"
+        command "armAway"
+        command "disarm"
                 
     }
 
     preferences {
-        // put configuration here
         section("Device Settings:") {
             input "MqttIP", "string", title:"MqttIP", description: "", required: true, displayDuringSetup: true
             input "area", "string", title:"Area", description: "", required: true, displayDuringSetup: true
@@ -46,7 +46,7 @@ void parse(String description) {
     state = interfaces.mqtt.parseMessage(description)
     if (logEnable) log.debug("Alarm ${interfaces.mqtt.parseMessage(description).payload}")
     status=interfaces.mqtt.parseMessage(description).payload 
-    sendEvent(name: "alarm", value: interfaces.mqtt.parseMessage(description).payload)
+    //sendEvent(name: "alarm", value: interfaces.mqtt.parseMessage(description).payload)
     sendEvent(name: "status", value: interfaces.mqtt.parseMessage(description).payload)
 
 }
@@ -82,21 +82,17 @@ void mqttClientStatus(String message) {
 }
 
 void armHome() {
-    if (logEnable) log.info "Mqtt Received status message to arm home"
     publishMsg("arm_home")
 }
 
 void armNight() {
-    if (logEnable) log.info "Mqtt Received status message to arm_night"
     publishMsg("arm_night")
 }
 
 void armAway() {
-    if (logEnable) log.info "Mqtt Received status message to arm_away"
     publishMsg("arm_away")
 }
 
 void disarm() {
-    if (logEnable) log.info "Mqtt Received status message to disarm"
     publishMsg("disarm")
 }
