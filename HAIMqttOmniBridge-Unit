@@ -1,0 +1,87 @@
+metadata {
+    definition (name: "HAIMqttOmniBridge-Unit", namespace: "Omnipro", author: "") {
+        capability "Initialize"
+        capability 'Switch'
+    }
+
+    preferences {
+        section("Device Settings:") {
+            input "MqttIP", "string", title:"MqttIP", description: "", required: true, displayDuringSetup: true
+            input "unit", "string", title:"Unit", description: "", required: true, displayDuringSetup: true
+            input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
+        }
+    }
+
+
+}
+
+void installed() {
+    log.warn "mqtt installed..."
+}
+
+def logsOff() {
+    log.warn "debug logging disabled..."
+    device.updateSetting("logEnable", [value: "false", type: "bool"])
+}
+
+// Parse incoming device messages to generate events
+void parse(String description) {
+    if (logEnable) log.debug description
+    if (logEnable) log.debug interfaces.mqtt.parseMessage(description).payload
+    state = interfaces.mqtt.parseMessage(description)
+    if ( interfaces.mqtt.parseMessage(description).payload == "ON") {
+        if (logEnable) log.debug("Unit ${unit} ON")
+        sendEvent(name: "switch", value: "on")
+        
+    } else {
+        if (logEnable) log.debug("Unit ${unit} OFF")
+        sendEvent(name: "switch", value: "off")
+    }    
+        
+}
+
+void publishMsg(String s) {
+    interfaces.mqtt.publish("omnilink/${unit}/command", s)
+}
+
+void updated() {
+    if (logEnable) log.info "updated..."
+    initialize()
+    if (logEnable) runIn(1800, logsOff)
+}
+
+void uninstalled() {
+    if (logEnable) log.info "disconnecting from mqtt"
+    interfaces.mqtt.disconnect()
+}
+
+void initialize() {
+    try {
+        def mqttInt = interfaces.mqtt
+        //open connection
+        mqttInt.connect("tcp://${settings.MqttIP}:1883", "hubitattest", null, null)
+        //give it a chance to start
+        pauseExecution(1000)
+        if (logEnable) log.info "connection established"
+        mqttInt.subscribe("omnilink/${unit}/state")
+        if (logEnable) log.info "Subscribed to omnilink/${unit}/state"
+        
+    } catch(e) {
+        if (logEnable) log.debug "mqtt initialize error: ${e.message}"
+    }
+}
+
+void mqttClientStatus(String message) {
+	if (logEnable) log.info "Mqtt Received status message ${message}"
+}
+
+def on() {
+    publishMsg("ON")
+    sendEvent(name: "switch", value: "on")
+}
+
+def off() {
+    publishMsg("OFF")
+    sendEvent(name: "switch", value: "off")
+}
+
