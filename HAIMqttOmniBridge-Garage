@@ -11,6 +11,8 @@ metadata {
         section("Device Settings:") {
             input "MqttIP", "string", title:"MqttIP", description: "", required: true, displayDuringSetup: true
             input "zone", "string", title:"Zone", description: "", required: true, displayDuringSetup: true
+            input "buttonopen", "string", title:"Button Open", description: "", required: true, displayDuringSetup: true
+            input "buttonclose", "string", title:"Button Close", description: "", required: true, displayDuringSetup: true
             input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
         }
     }
@@ -44,7 +46,6 @@ void installed() {
     log.warn "mqtt installed..."
 }
 
-// Parse incoming device messages to generate events
 void parse(String description) {
     if (logEnable) log.debug description
     if (logEnable) log.debug interfaces.mqtt.parseMessage(description).payload
@@ -53,13 +54,10 @@ void parse(String description) {
         if (logEnable) log.debug("Door secure")
         door="closed"
         sendEvent(name: "door", value: "closed")
-        //sendEvent(name: "contact", value: "closed")
     } else {
         if (logEnable) log.debug("Door open")
         door="open"
         sendEvent(name: "door", value: "open")
-        //sendEvent(name: "contact", value: "open")
-        
     }    
         
 }
