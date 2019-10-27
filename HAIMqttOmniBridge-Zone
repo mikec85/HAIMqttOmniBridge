@@ -23,6 +23,7 @@ metadata {
 
 void installed() {
     log.warn "mqtt installed..."
+    initialize()
 }
 def logsOff() {
     log.warn "debug logging disabled..."
