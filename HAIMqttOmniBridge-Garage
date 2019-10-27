@@ -44,6 +44,7 @@ def logsOff() {
 
 void installed() {
     log.warn "mqtt installed..."
+    initialize()
 }
 
 void parse(String description) {
