@@ -17,6 +17,7 @@ metadata {
 
 void installed() {
     log.warn "mqtt installed..."
+    initialize()
 }
 
 def logsOff() {
