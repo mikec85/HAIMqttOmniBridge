@@ -67,7 +67,7 @@ void initialize() {
     try {
         def mqttInt = interfaces.mqtt
         //open connection
-        mqttInt.connect("tcp://${settings.MqttIP}:1883", "hubitattest", null, null)
+        mqttInt.connect("tcp://${settings.MqttIP}:1883", "hai${zone}t", null, null)
         //give it a chance to start
         pauseExecution(1000)
         if (logEnable) log.info "connection established"
