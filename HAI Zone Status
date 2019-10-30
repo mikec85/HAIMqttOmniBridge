@@ -1,0 +1,131 @@
+metadata {
+    definition (name: "HAI Zone Status", namespace: "Omnipro2", author: "") {
+        capability "Initialize"
+        capability "Contact Sensor"
+        capability "Configuration"
+        
+        attribute "contact", "string"
+        
+        command "CreateChildZone", ["String"]
+    }
+
+    preferences {
+        section("Device Settings:") {
+            input "MqttIP", "string", title:"MqttIP", description: "", required: true, displayDuringSetup: true
+            input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
+        }
+    }
+
+
+}
+
+void installed() {
+    log.warn "mqtt installed..."
+    initialize()
+}
+def logsOff() {
+    log.warn "debug logging disabled..."
+    device.updateSetting("logEnable", [value: "false", type: "bool"])
+}
+
+void parse(String description) {
+    if (interfaces.mqtt.parseMessage(description).topic.contains("zone") ){
+    
+    zone=interfaces.mqtt.parseMessage(description).topic
+    zone=zone.substring(zone.indexOf("/")+1)
+    zone=zone.substring(0,zone.indexOf("/"))
+    state = interfaces.mqtt.parseMessage(description)
+        if (logEnable) log.info(zone)
+        if(checkChild(zone)){
+            log.debug "have a child"
+            if ( interfaces.mqtt.parseMessage(description).payload == "secure") {
+                if (logEnable) log.debug("Alarm tamper is clear")
+                notifychild(zone,"closed")
+            } else {
+                if (logEnable) log.debug("Alarm tamper is detected")
+                notifychild(zone,"open")
+            }    
+        } else {
+            if (logEnable) log.debug "no child"
+        }
+    }    
+}
+
+void updated() {
+    log.info "updated..."
+    initialize()
+    log.warn "debug logging is: ${logEnable == true}"
+    if (logEnable) runIn(1800, logsOff)
+}
+
+void uninstalled() {
+    if (logEnable) log.info "disconnecting from mqtt"
+    interfaces.mqtt.disconnect()
+}
+
+void initialize() {
+    try {
+        def mqttIntParent = interfaces.mqtt
+        //open connection
+        if (!interfaces.mqtt.isConnected()) { 
+            mqttIntParent.connect("tcp://${settings.MqttIP}:1883", "haizonestatus", null, null)
+        }
+        //give it a chance to start
+        pauseExecution(1000)
+        log.info "connection established"
+        mqttIntParent.subscribe("omnilink/#")
+        log.info "Subscribed to omnilink/${zone}/state"
+        
+    } catch(e) {
+        log.debug "mqtt initialize error: ${e.message}"
+    }
+}
+
+void mqttClientStatus(String message) {
+	if (logEnable) log.info "Mqtt Received status message ${message}"
+}
+
+void CreateChildZone(String thezone){
+    def cd = fetchChild(thezone)
+    cd.parsechild("open")
+} 
+
+def checkChild(String type){
+    String thisId = device.id
+    log.info(type)
+    log.info("${thisId}-${type}")
+    def cd = getChildDevice("${thisId}-${type}")
+    if (!cd) {
+        return false
+    }
+    return true 
+}
+
+def fetchChild(String type){
+    String thisId = device.id
+    def cd = getChildDevice("${thisId}-${type}")
+    if (!cd) {
+        cd = addChildDevice("Omnipro2", "HAI Zone Status", "${thisId}-${type}", [name: "${device.displayName} ${type}", isComponent: true])
+        List<Map> defaultValues = []
+        defaultValues.add([name:"status", value:"open", descriptionText:"set initial zone value"])
+        //defaultValues.add([name:"MqttIP", value:MqttIP, descriptionText:"set mqtt ip"])
+        cd.parse(defaultValues)
+    }
+    return cd 
+}
+
+void notifychild(String chzone, String status){
+    def cd = fetchChild(chzone)
+    cd.parsechild(status)
+}
+void parsechild(String description) {
+    log.info zone
+    log.info description
+    sendEvent(name: "contact", value: description)
+}
+
+List<String> configure() {
+    log.warn "configure..."
+    runIn(1800,logsOff)
+    //your configuration commands here...
+}
