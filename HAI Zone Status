@@ -29,26 +29,28 @@ def logsOff() {
 }
 
 void parse(String description) {
-    if (interfaces.mqtt.parseMessage(description).topic.contains("zone") ){
+    topic = interfaces.mqtt.parseMessage(description).topic
     
-    zone=interfaces.mqtt.parseMessage(description).topic
-    zone=zone.substring(zone.indexOf("/")+1)
-    zone=zone.substring(0,zone.indexOf("/"))
-    state = interfaces.mqtt.parseMessage(description)
-        if (logEnable) log.info(zone)
-        if(checkChild(zone)){
-            log.debug "have a child"
-            if ( interfaces.mqtt.parseMessage(description).payload == "secure") {
-                if (logEnable) log.debug("Alarm tamper is clear")
-                notifychild(zone,"closed")
+    if (topic.contains("zone") && topic.contains("/state")){
+    
+        zone=interfaces.mqtt.parseMessage(description).topic
+        zone=zone.substring(zone.indexOf("/")+1)
+        zone=zone.substring(0,zone.indexOf("/"))
+        state = interfaces.mqtt.parseMessage(description)
+            if (logEnable)log.info(zone)
+            if(checkChild(zone)){
+                //log.debug "have a child"
+                if ( interfaces.mqtt.parseMessage(description).payload == "secure") {
+                    if (logEnable) log.debug("Alarm tamper is clear")
+                    notifychild(zone,"closed")
+                } else {
+                    if (logEnable) log.debug("Alarm tamper is detected")
+                    notifychild(zone,"open")
+                }    
             } else {
-                if (logEnable) log.debug("Alarm tamper is detected")
-                notifychild(zone,"open")
-            }    
-        } else {
-            if (logEnable) log.debug "no child"
-        }
-    }    
+                if (logEnable) log.debug "no child"
+            }
+     }    
 }
 
 void updated() {
@@ -119,9 +121,12 @@ void notifychild(String chzone, String status){
     cd.parsechild(status)
 }
 void parsechild(String description) {
-    log.info zone
-    log.info description
     sendEvent(name: "contact", value: description)
+    if(description == "open") {   
+        sendEvent(name: "motion", value: "active") 
+    } else {
+        sendEvent(name: "motion", value: "inactive") 
+    }
 }
 
 List<String> configure() {
