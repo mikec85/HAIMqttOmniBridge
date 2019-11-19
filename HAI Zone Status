@@ -3,10 +3,12 @@ metadata {
         capability "Initialize"
         capability "Contact Sensor"
         capability "Configuration"
+        //capability "MotionSensor"
         
         attribute "contact", "string"
         
         command "CreateChildZone", ["String"]
+        command "subscribechildzones", ["String"]
     }
 
     preferences {
@@ -29,6 +31,7 @@ def logsOff() {
 }
 
 void parse(String description) {
+    
     topic = interfaces.mqtt.parseMessage(description).topic
     
     if (topic.contains("zone") && topic.contains("/state")){
@@ -75,7 +78,10 @@ void initialize() {
         //give it a chance to start
         pauseExecution(1000)
         log.info "connection established"
-        mqttIntParent.subscribe("omnilink/#")
+        
+        subscribechildzones()
+        
+        //mqttIntParent.subscribe("omnilink/#")
         log.info "Subscribed to omnilink/${zone}/state"
         
     } catch(e) {
@@ -94,8 +100,6 @@ void CreateChildZone(String thezone){
 
 def checkChild(String type){
     String thisId = device.id
-    log.info(type)
-    log.info("${thisId}-${type}")
     def cd = getChildDevice("${thisId}-${type}")
     if (!cd) {
         return false
@@ -126,6 +130,17 @@ void parsechild(String description) {
         sendEvent(name: "motion", value: "active") 
     } else {
         sendEvent(name: "motion", value: "inactive") 
+    }
+}
+void parentsubscribe(String zone){
+    interfaces.mqtt.subscribe("omnilink/${zone}/state")
+}
+void subscribechildzones(){
+    def children = childDevices
+    for (def item : children) {
+        log.info "${item.deviceNetworkId}"
+        zone=item.deviceNetworkId.substring(item.deviceNetworkId.indexOf("-")+1)
+        parentsubscribe(zone)
     }
 }
 
