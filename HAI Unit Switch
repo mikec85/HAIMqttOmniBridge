@@ -1,0 +1,183 @@
+metadata {
+    definition (name: "HAI Unit Switch", namespace: "Omnipro2", author: "") {
+        capability "Initialize"
+        capability 'Switch'
+        
+        attribute "contact", "string"
+        //attribute "mqttIntParent", "interfaces.mqtt"
+        
+        command "CreateChildUnit", ["String"]
+        command "DeleteChildUnit", ["String"]
+        command "subscribechildunits", ["String"]
+    }
+
+    preferences {
+        section("Device Settings:") {
+            input "MqttIP", "string", title:"MqttIP", description: "", required: true, displayDuringSetup: true
+            input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
+        }
+    }
+
+
+}
+
+void installed() {
+    log.warn "mqtt installed..."
+    initialize()
+}
+def logsOff() {
+    log.warn "debug logging disabled..."
+    device.updateSetting("logEnable", [value: "false", type: "bool"])
+}
+
+void parse(String description) {
+    
+    topic = interfaces.mqtt.parseMessage(description).topic
+    
+    if (topic.contains("unit") && topic.contains("/state")){
+        log.debug topic
+        unit=interfaces.mqtt.parseMessage(description).topic
+        unit=unit.substring(unit.indexOf("/")+1)
+        unit=unit.substring(0,unit.indexOf("/"))
+        state = interfaces.mqtt.parseMessage(description)
+            if (logEnable)log.info(unit)
+            if(checkChild(unit)){
+                //log.debug "have a child"
+                if ( interfaces.mqtt.parseMessage(description).payload == "ON") {
+                    if (logEnable) log.debug("Unit is ON")
+                    notifychild(unit,"on")
+                } else {
+                    if (logEnable) log.debug("Unit is OFF")
+                    notifychild(unit,"off")
+                }    
+            } else {
+                if (logEnable) log.debug "no child"
+            }
+     }    
+}
+
+void updated() {
+    log.info "updated..."
+    initialize()
+    log.warn "debug logging is: ${logEnable == true}"
+    if (logEnable) runIn(1800, logsOff)
+}
+
+void uninstalled() {
+    if (logEnable) log.info "disconnecting from mqtt"
+    interfaces.mqtt.disconnect()
+}
+
+void initialize() {
+    try {
+        def mqttIntParent = interfaces.mqtt
+        //open connection
+        if (!interfaces.mqtt.isConnected()) { 
+            mqttIntParent.connect("tcp://${settings.MqttIP}:1883", "haiunitswitch", null, null)
+        }
+        //give it a chance to start
+        pauseExecution(1000)
+        log.info "connection established"
+        //mqttIntParent.subscribe("omnilink/#")
+        
+        subscribechildunits()
+        
+        log.info "Subscribed to omnilink/#"
+        
+    } catch(e) {
+        log.debug "mqtt initialize error: ${e.message}"
+    }
+}
+
+void parentsubscribe(String unit){
+    interfaces.mqtt.subscribe("omnilink/${unit}/state")
+}
+
+void mqttClientStatus(String message) {
+	if (logEnable) log.info "Mqtt Received status message ${message}"
+}
+
+void CreateChildUnit(String theunit){
+    def cd = fetchChild(theunit)
+    cd.parsechild("on")
+} 
+
+void DeleteChildUnit(String theunit){
+    deleteChildDevice(theunit)
+} 
+
+
+def checkChild(String Unit){
+    String thisId = device.id
+    def cd = getChildDevice("${thisId}-${Unit}")
+    if (!cd) {
+        return false
+    }
+    return true 
+}
+
+def fetchChild(String Unit){
+    String thisId = device.id
+    def cd = getChildDevice("${thisId}-${Unit}")
+    if (!cd) {
+        cd = addChildDevice("Omnipro2", "HAI Unit Switch", "${thisId}-${Unit}", [name: "${device.displayName}", isComponent: true])
+        List<Map> defaultValues = []
+        defaultValues.add([name:"switch", value:"off", descriptionText:"set initial unit value"])
+        defaultValues.add([name:"unit", value: "${Unit}", descriptionText:"set initial unit value"])
+        //defaultValues.add([name:"MqttIP", value:MqttIP, descriptionText:"set mqtt ip"])
+        cd.parse(defaultValues)
+    }
+    return cd 
+}
+
+
+void notifychild(String chunit, String status){
+    def cd = fetchChild(chunit)
+    cd.parsechild(status)
+}
+void parsechild(String description) {
+    sendEvent(name: "switch", value: description)
+}
+
+def on() {
+    log.info("Turning on  ${device.id}  ${device.displayName}   l${device.deviceNetworkId}l  ${device.unit}")
+    childSwitchOn()
+}
+def off() {
+    log.info("Turning off  ${device.id}  ${device.displayName}   l${device.deviceNetworkId}l  ${device.unit}")
+    childSwitchOff()
+}
+
+//demo custom commands
+void childSwitchOn(){
+    unit=device.deviceNetworkId.substring(device.deviceNetworkId.indexOf("-")+1)
+    if (logEnable) log.info "${unit}"
+    parent.publishMsg("ON",unit)
+}
+
+void childSwitchOff(){
+    unit=device.deviceNetworkId.substring(device.deviceNetworkId.indexOf("-")+1)
+    if (logEnable) log.info "${unit}"
+    parent.publishMsg("OFF",unit)
+}
+
+void publishMsg(String cmd, String unit) {
+    if (logEnable) log.info "omnilink/${unit}/command     ${cmd}"
+    if (!interfaces.mqtt.isConnected()) { 
+          log.error "mqtt not connected"
+    }    
+    interfaces.mqtt.publish("omnilink/${unit}/command", cmd)
+}
+void subscribechildunits(){
+    def children = childDevices
+    for (def item : children) {
+        log.info "${item.deviceNetworkId}"
+        unit=item.deviceNetworkId.substring(item.deviceNetworkId.indexOf("-")+1)
+        parentsubscribe(unit)
+    }
+}
+List<String> configure() {
+    log.warn "configure..."
+    runIn(1800,logsOff)
+    //your configuration commands here...
+}
