@@ -2,12 +2,16 @@ metadata {
     definition (name: "HAIMqttOmniBridge-Garage", namespace: "Omnipro", author: "Test") {
         capability "Initialize"
         capability "Garage Door Control"
+        capability "Momentary"
        
         attribute "door", "string"
+        
         command "publishMsg", ["String"]
+              
     }
 
     preferences {
+        // put configuration here
         section("Device Settings:") {
             input "MqttIP", "string", title:"MqttIP", description: "", required: true, displayDuringSetup: true
             input "zone", "string", title:"Zone", description: "", required: true, displayDuringSetup: true
@@ -39,7 +43,7 @@ metadata {
 
 def logsOff() {
     log.warn "debug logging disabled..."
-    device.updateSetting("logEnable", [value: "false", type: "bool"])
+    //device.updateSetting("logEnable", [value: "false", type: "bool"])
 }
 
 void installed() {
@@ -48,19 +52,23 @@ void installed() {
 }
 
 void parse(String description) {
-    if (logEnable) log.debug description
-    if (logEnable) log.debug interfaces.mqtt.parseMessage(description).payload
-    state = interfaces.mqtt.parseMessage(description)
-    if ( interfaces.mqtt.parseMessage(description).payload == "secure") {
-        if (logEnable) log.debug("Door secure")
-        door="closed"
-        sendEvent(name: "door", value: "closed")
-    } else {
-        if (logEnable) log.debug("Door open")
-        door="open"
-        sendEvent(name: "door", value: "open")
+    if (logEnable) log.debug interfaces.mqtt.parseMessage(description).topic
+    if (logEnable) log.debug "omnilink/${zone}/state"
+    if (interfaces.mqtt.parseMessage(description).topic == "omnilink/${zone}/state"){
+        if (logEnable) log.debug "matched topic"
+        if (logEnable) log.debug description
+        if (logEnable) log.debug interfaces.mqtt.parseMessage(description).payload
+        if (logEnable) log.debug interfaces.mqtt.parseMessage(description).topic
+        if ( interfaces.mqtt.parseMessage(description).payload == "secure" || interfaces.mqtt.parseMessage(description).payload == "armed") {
+            if (logEnable) log.debug("Door secure")
+            door="closed"
+            sendEvent(name: "door", value: "closed")
+        } else {
+            if (logEnable) log.debug("Door open")
+            door="open"
+            sendEvent(name: "door", value: "open")
+        }    
     }    
-        
 }
 
 void publishMsg(String s) {
@@ -72,8 +80,20 @@ void updated() {
     initialize()
     log.warn "debug logging is: ${logEnable == true}"
     if (logEnable) runIn(1800, logsOff)
+    runIn(3600, CheckMQTTConnection)
 }
 
+void CheckMQTTConnection() {
+    if (interfaces.mqtt.isConnected())  { 
+        if (logEnable) log.warn "Is Connected"
+    } 
+    else { 
+        if (logEnable)log.warn "Not Connected"
+        log.warn "MQTT Not Connected Trying to reconnect"
+        initialize()
+    }
+    runIn(3600, CheckMQTTConnection)    
+}
 void uninstalled() {
     log.info "disconnecting from mqtt"
     interfaces.mqtt.disconnect()
@@ -81,15 +101,19 @@ void uninstalled() {
 
 void initialize() {
     try {
-        def mqttInt = interfaces.mqtt
+        log.info "MQTT client initialising  isconnected ${interfaces.mqtt.isConnected()}"  
+        def mqttIntGarage = interfaces.mqtt
         //open connection
-        mqttInt.connect("tcp://${settings.MqttIP}:1883", "haig${zone}", null, null)
+        if (!interfaces.mqtt.isConnected()) { 
+            log.info "MQTT client trying to connect"
+            mqttIntGarage.connect("tcp://${settings.MqttIP}:1883", "HubitatGarage${zone}", null, null)
+        }
         //give it a chance to start
         pauseExecution(1000)
-        log.info "connection established"
-        mqttInt.subscribe("omnilink/${zone}/state")
-        log.info "Subscribed to omnilink/${zone}/state"
-        publishMsg("TestingMqtt")
+        interfaces.mqtt.publish("hubitat/HubitatGarage${zone}/" + 'client',"${new Date()}",1,true)
+        log.info "connection established  ${interfaces.mqtt.isConnected()}"
+        mqttIntGarage.subscribe("omnilink/${zone}/state")
+        //log.info "Subscribed to omnilink/${zone}/state"
     } catch(e) {
         log.debug "mqtt initialize error: ${e.message}"
     }
@@ -97,6 +121,7 @@ void initialize() {
 
 void mqttClientStatus(String message) {
 	log.info "Mqtt Received status message ${message}"
+    state.lastMessage = message
 }
 
 void open() {
