@@ -43,7 +43,7 @@ void parse(String description) {
             if (logEnable)log.info(zone)
             if(checkChild(zone)){
                 //log.debug "have a child"
-                if ( interfaces.mqtt.parseMessage(description).payload == "secure") {
+                if ( interfaces.mqtt.parseMessage(description).payload == "secure" || interfaces.mqtt.parseMessage(description).payload == "armed") {
                     if (logEnable) log.debug("Alarm tamper is clear")
                     notifychild(zone,"closed")
                 } else {
