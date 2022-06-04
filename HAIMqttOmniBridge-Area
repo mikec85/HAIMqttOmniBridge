@@ -1,14 +1,22 @@
 metadata {
     definition (name: "HAIMqttOmniBridge-Area", namespace: "Omnipro", author: "Test") {
         capability "Initialize"
+        capability "Lock Codes"
+		capability "Security Keypad"
+        capability "Momentary"
+		capability "Actuator"
+		capability "TamperAlert"
+        capability "PushableButton"
         
-        attribute "status", "string"
+        attribute "status", "enum", ["disarmed", "armed_night", "armed_day", "armed_away", "armed_vacation", "pending"]
         
         command "publishMsg", ["String"]
         command "armHome"
         command "armNight"
         command "armAway"
         command "disarm"
+        command "updated"
+        command "push"
                 
     }
 
@@ -19,12 +27,19 @@ metadata {
             input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
         }
     }
-
-
+    tiles (scale: 2)
+	{
+        standardTile("AlarmDisarm", "disarm", height: 2, width: 2, decoration:"flat", inactiveLabel: false)
+		{
+			state "inactive", label:"Disarm", action:"AlarmDisarm", backgroundColor:"#D8D8D8"
+			state "changing", label:"Disarming", action:"", backgroundColor:"#FF9900"
+			state "active", label:"Disarmed", action:"", backgroundColor:"#00CC00"
+		}
+    }
 }
 
 void installed() {
-    log.warn "HAIMqttOmniBridge-Area mqtt installed..."
+    log.warn "mqtt installed..."
     initialize()
 }
 
@@ -38,18 +53,33 @@ def updated() {
     initialize()
     log.warn "debug logging is: ${logEnable == true}"
     if (logEnable) runIn(1800, logsOff)
+    runIn(1800, CheckMQTTConnection)
 }
 
-// Parse incoming device messages to generate events
+void CheckMQTTConnection() {
+    if (interfaces.mqtt.isConnected())  { 
+        if (logEnable) log.warn "Is Connected"
+    } 
+    else { 
+        if (logEnable)log.warn "Not Connected"
+        initialize()
+    }
+    runIn(1800, CheckMQTTConnection)    
+}
+def commandHSM(action){
+    log.debug "commandHSM - ${action}"
+    log.info("commandHSM")
+}
 void parse(String description) {
-    if (logEnable) log.debug description
-    if (logEnable) log.debug interfaces.mqtt.parseMessage(description).payload
-    state = interfaces.mqtt.parseMessage(description)
-    if (logEnable) log.debug("Alarm ${interfaces.mqtt.parseMessage(description).payload}")
-    status=interfaces.mqtt.parseMessage(description).payload 
-    //sendEvent(name: "alarm", value: interfaces.mqtt.parseMessage(description).payload)
-    sendEvent(name: "status", value: interfaces.mqtt.parseMessage(description).payload)
-
+    log.info("parse")
+    if (interfaces.mqtt.parseMessage(description).topic == "omnilink/${area}/state"){
+       if (logEnable) log.debug "parse description ${description}"
+       if (logEnable) log.debug interfaces.mqtt.parseMessage(description).payload
+       state = interfaces.mqtt.parseMessage(description)
+       if (logEnable) log.debug("Alarm ${interfaces.mqtt.parseMessage(description).payload}")
+       status=interfaces.mqtt.parseMessage(description).payload 
+       sendEvent(name: "status", value: interfaces.mqtt.parseMessage(description).payload)
+    }
 }
 
 void publishMsg(String s) {
@@ -61,15 +91,17 @@ void uninstalled() {
     if (logEnable) log.info "disconnecting from mqtt"
     interfaces.mqtt.disconnect()
 }
-
 void initialize() {
     try {
         def mqttInt = interfaces.mqtt
         //open connection
-        mqttInt.connect("tcp://${settings.MqttIP}:1883", "haiareat", null, null)
+        if (!interfaces.mqtt.isConnected()) { 
+            mqttInt.connect("tcp://${settings.MqttIP}:1883", "HubitatArea${area}", null, null)
+        }
         //give it a chance to start
         pauseExecution(1000)
         if (logEnable) log.info "connection established"
+        interfaces.mqtt.publish("hubitat/HubitatArea${area}/" + 'client',"${new Date()}",1,true)
         mqttInt.subscribe("omnilink/${area}/state")
         if (logEnable) log.info "Subscribed to omnilink/${area}/state"
         
@@ -85,7 +117,24 @@ void mqttClientStatus(String message) {
 void armHome() {
     publishMsg("arm_home")
 }
+def changeMode(mode) {
 
+log.info "Changing Mode to: $mode"
+
+}
+def setArmed() {
+
+log.info "setArmed"
+
+}
+def button(test) {
+log.info "button"
+}
+def setMode(test) {
+
+log.info "setMode"
+
+}
 void armNight() {
     publishMsg("arm_night")
 }
@@ -95,5 +144,25 @@ void armAway() {
 }
 
 void disarm() {
+    log.info "disarm"
     publishMsg("disarm")
+}
+
+
+def push(btn) {
+    log.info btn
+    if(btn=="armAway"){
+		publishMsg("arm_away")
+		return
+	}
+    if(btn=="disarm"){
+		publishMsg("disarm")
+        log.info "Pushed Disarm"
+		return
+	}
+    if(btn=="armNight"){
+		publishMsg("arm_night")
+		return
+	}
+    log.info "push"
 }
