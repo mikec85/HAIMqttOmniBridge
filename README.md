@@ -1,6 +1,6 @@
 # HAIMqttOmniBridge
 
-This is a way of getting HAI Omnipro information into Hubitat.   Could not find anything so cobbled something together to make it work and hopefully this will help someone else.
+This is a way of getting HAI Omnipro information into Hubitat.   Could not find anything so I put this together to make it work and hopefully this will help someone else.
 
 First you need to setup a great piece of code https://github.com/excaliburpartners/OmniLinkBridge  which gets the information into mqtt.
 
